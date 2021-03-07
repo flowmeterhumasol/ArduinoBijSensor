@@ -35,7 +35,7 @@ void setup()
   digitalWrite(statusLed, HIGH);  // We have an active-low LED attached
   
   pinMode(sensorPin, INPUT);
-  digitalWrite(sensorPin, HIGH);
+  //digitalWrite(sensorPin, HIGH);
 
   pulseCount        = 0;
   flowRate          = 0.0;
@@ -96,7 +96,7 @@ void loop()
     Serial.println("mL"); 
     Serial.print("\t");       // Print tab space
   Serial.print(totalMilliLitres/1000);
-  Serial.print("L");
+  Serial.println("L");
     
 
     // Reset the pulse counter so we can start incrementing again

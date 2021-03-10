@@ -15,7 +15,7 @@
 RH_RF95 rf95(6, 2);
 unsigned long totalLiters = 67;
 unsigned int kraannmr = 0;
-char* message; 
+String message; 
 
 
 void setup() 
@@ -42,8 +42,12 @@ void loop()
   // Send a message to rf95_server
   sprintf(message,"%d:%f", kraannmr,totalLiters);
   if (strlen(message)<RH_RF95_MAX_MESSAGE_LEN)
-  rf95.send((uint8_t *)message, sizeof(message));
-  
+  //rf95.send((uint8_t *)message, sizeof(message));
+  uint8_t data[] =  atoi(message.c_str ());
+
+  //uint8_t data[] = "Hello World!";
+  rf95.send(data, sizeof(data));
+
   rf95.waitPacketSent();
   // Now wait for a reply
   uint8_t buf[RH_RF95_MAX_MESSAGE_LEN];

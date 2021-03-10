@@ -6,23 +6,24 @@ Connect Vcc and Gnd of sensor to arduino, and the
 signal line to arduino digital pin 2.
  
  */
+#include <Arduino.h>
 
 byte statusLed    = 13;
-
-byte sensorInterrupt = 0;  // 0 = digital pin 2
-byte sensorPin       = 2;
+byte PIN_SENSOR   = 10;
 
 // The hall-effect flow sensor outputs approximately 4.5 pulses per second per
 // litre/minute of flow.
 float calibrationFactor = 98;
-
-volatile byte pulseCount;  
-
+volatile uint16_t pulseCount;  
 float flowRate;
 unsigned int flowMilliLitres;
 unsigned long totalMilliLitres;
-
 unsigned long oldTime;
+
+//bool prevButtonState = true;
+//bool btnPressed = false;
+bool prevPulsState = true; 
+bool FlowPuls = false; 
 
 void setup()
 {
@@ -34,39 +35,41 @@ void setup()
   pinMode(statusLed, OUTPUT);
   digitalWrite(statusLed, HIGH);  // We have an active-low LED attached
   
-  pinMode(sensorPin, INPUT);
-  digitalWrite(sensorPin, HIGH);
+  //Setup Interuptpin 10 
+  //pinMode(PIN_SENSOR, INPUT_PULLUP);
+  pinMode(PIN_SENSOR, INPUT);
+  *digitalPinToPCMSK(PIN_SENSOR) |= bit (digitalPinToPCMSKbit(PIN_SENSOR));  // enable pin
+  PCIFR  |= bit (digitalPinToPCICRbit(PIN_SENSOR)); // clear any outstanding interrupt
+  PCICR  |= bit (digitalPinToPCICRbit(PIN_SENSOR)); // enable interrupt for the group
 
   pulseCount        = 0;
   flowRate          = 0.0;
   flowMilliLitres   = 0;
   totalMilliLitres  = 0;
   oldTime           = 0;
-
-  // The Hall-effect sensor is connected to pin 2 which uses interrupt 0.
-  // Configured to trigger on a FALLING state change (transition from HIGH
-  // state to LOW state)
-  attachInterrupt(sensorInterrupt, pulseCounter, FALLING);
 }
 
-/**
- * Main program loop
- */
 void loop()
 {
-   
+   // Print pulscount
+  /*  Serial.print("Pulsecount: ");        
+    Serial.println(pulseCount);
+    delay(1000);
+   */
    if((millis() - oldTime) > 1000)    // Only process counters once per second
   { 
-    // Disable the interrupt while calculating flow rate and sending the value to
-    // the host
-    detachInterrupt(sensorInterrupt);
-        
+    //Store counter temporarily
+    uint16_t pc = pulseCount;
+
+    // Reset the pulse counter so we can start incrementing again 
+    pulseCount = 0;
+  
     // Because this loop may not complete in exactly 1 second intervals we calculate
     // the number of milliseconds that have passed since the last execution and use
     // that to scale the output. We also apply the calibrationFactor to scale the output
     // based on the number of pulses per second per units of measure (litres/minute in
     // this case) coming from the sensor.
-    flowRate = ((1000.0 / (millis() - oldTime)) * pulseCount) / calibrationFactor;
+    flowRate = ((1000.0 / (millis() - oldTime)) * pc) / calibrationFactor;
     
     // Note the time this processing pass was executed. Note that because we've
     // disabled interrupts the millis() function won't actually be incrementing right
@@ -82,36 +85,31 @@ void loop()
     // Add the millilitres passed in this second to the cumulative total
     totalMilliLitres += flowMilliLitres;
       
-    unsigned int frac;
     
-    // Print the flow rate for this second in litres / minute
-    Serial.print("Flow rate: ");
-    Serial.print(int(flowRate));  // Print the integer part of the variable
-    Serial.print("L/min");
-    Serial.print("\t");       // Print tab space
-
     // Print the cumulative total of litres flowed since starting
     Serial.print("Output Liquid Quantity: ");        
     Serial.print(totalMilliLitres);
     Serial.println("mL"); 
     Serial.print("\t");       // Print tab space
-  Serial.print(totalMilliLitres/1000);
-  Serial.println("L");
-    
 
-    // Reset the pulse counter so we can start incrementing again
-    pulseCount = 0;
-    
-    // Enable the interrupt again now that we've finished sending output
-    attachInterrupt(sensorInterrupt, pulseCounter, FALLING);
   }
 }
 
-/*
-Insterrupt Service Routine
- */
-void pulseCounter()
-{
-  // Increment the pulse counter
-  pulseCount++;
+// Making an interrupt pin from pin 10 
+ISR (PCINT0_vect){ //  pin change interrupt for D8 to D13
+  PCIFR  |= bit (digitalPinToPCICRbit(PIN_SENSOR)); // clear any outstanding interrupt
+  bool currentState = (bool)digitalRead(PIN_SENSOR);
+  if(!FlowPuls && prevPulsState){
+    if(!currentState){
+      pulseCount++;
+      FlowPuls = true; 
+    }
+  }
+  // Only nescessary for debouncing 
+  else if (FlowPuls && !prevPulsState){
+    if(currentState){
+      FlowPuls = false; 
+    }
+  }
+  prevPulsState = currentState;
 }

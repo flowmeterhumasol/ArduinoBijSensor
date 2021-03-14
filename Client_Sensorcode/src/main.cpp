@@ -10,7 +10,6 @@ signal line to arduino digital pin 2.
 
 byte statusLed    = 13;
 byte PIN_SENSOR   = 10;
-
 // The hall-effect flow sensor outputs approximately 4.5 pulses per second per
 // litre/minute of flow.
 float calibrationFactor = 98;
@@ -30,8 +29,8 @@ void setup()
   Serial.begin(9600);
    
   // Set up the status LED line as an output
-  pinMode(statusLed, OUTPUT);
-  digitalWrite(statusLed, HIGH);  // We have an active-low LED attached
+  //pinMode(statusLed, OUTPUT);
+  //digitalWrite(statusLed, HIGH);  // We have an active-low LED attached
   
   //Setup Interuptpin 10 
   //pinMode(PIN_SENSOR, INPUT_PULLUP);
@@ -55,8 +54,8 @@ void loop()
     delay(1000);
    */
    
-   //if((millis() - oldTime) > 1000)    // Only process counters once per second
-  if((millis() - oldTime) > 60000)    // Only process counters once per minute 
+  if((millis() - oldTime) > 1000)    // Only process counters once per second
+  //if((millis() - oldTime) > 60000)    // Only process counters once per minute 
   { 
     //Store counter temporarily
     uint16_t pulseCount_temp = pulseCount;
@@ -69,8 +68,8 @@ void loop()
     // that to scale the output. We also apply the calibrationFactor to scale the output
     // based on the number of pulses per second per units of measure (litres/minute in
     // this case) coming from the sensor.
-    //flowRate = ((1000.0 / (millis() - oldTime)) * pulseCount_temp) / calibrationFactor;
-    flowRate = ((60000.0 / (millis() - oldTime)) * pulseCount_temp) / calibrationFactor;
+    flowRate = ((1000.0 / (millis() - oldTime)) * pulseCount_temp) / calibrationFactor;   // calculating per seconde 
+    //flowRate = ((60000.0 / (millis() - oldTime)) * pulseCount_temp) / calibrationFactor; // calculating per minute
 
 
     // Note the time this processing pass was executed. Note that because we've
@@ -82,7 +81,8 @@ void loop()
     // Divide the flow rate in litres/minute by 60 to determine how many litres have
     // passed through the sensor in this 1 second interval, then multiply by 1000 to
     // convert to millilitres.
-    flowMilliLitres = (flowRate / 60) * 1000;
+    flowMilliLitres = (flowRate / 60) * 1000;   // calculating per seconde 
+    //flowMilliLitres = flowRate  * 1000;         // calculating per minute
     
     // Add the millilitres passed in this second to the cumulative total
     totalMilliLitres += flowMilliLitres;

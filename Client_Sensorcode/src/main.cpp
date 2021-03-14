@@ -20,8 +20,6 @@ unsigned int flowMilliLitres;
 unsigned long totalMilliLitres;
 unsigned long oldTime;
 
-//bool prevButtonState = true;
-//bool btnPressed = false;
 bool prevPulsState = true; 
 bool FlowPuls = false; 
 
@@ -56,10 +54,12 @@ void loop()
     Serial.println(pulseCount);
     delay(1000);
    */
-   if((millis() - oldTime) > 1000)    // Only process counters once per second
+   
+   //if((millis() - oldTime) > 1000)    // Only process counters once per second
+  if((millis() - oldTime) > 60000)    // Only process counters once per minute 
   { 
     //Store counter temporarily
-    uint16_t pc = pulseCount;
+    uint16_t pulseCount_temp = pulseCount;
 
     // Reset the pulse counter so we can start incrementing again 
     pulseCount = 0;
@@ -69,8 +69,10 @@ void loop()
     // that to scale the output. We also apply the calibrationFactor to scale the output
     // based on the number of pulses per second per units of measure (litres/minute in
     // this case) coming from the sensor.
-    flowRate = ((1000.0 / (millis() - oldTime)) * pc) / calibrationFactor;
-    
+    //flowRate = ((1000.0 / (millis() - oldTime)) * pulseCount_temp) / calibrationFactor;
+    flowRate = ((60000.0 / (millis() - oldTime)) * pulseCount_temp) / calibrationFactor;
+
+
     // Note the time this processing pass was executed. Note that because we've
     // disabled interrupts the millis() function won't actually be incrementing right
     // at this point, but it will still return the value it was set to just before
@@ -105,7 +107,7 @@ ISR (PCINT0_vect){ //  pin change interrupt for D8 to D13
       FlowPuls = true; 
     }
   }
-  // Only nescessary for debouncing 
+  // Only nescessary for debouncing (when making puls by hand)
   else if (FlowPuls && !prevPulsState){
     if(currentState){
       FlowPuls = false; 

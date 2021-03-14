@@ -1,9 +1,11 @@
 #include <Arduino.h>
 #include <SPI.h>
 #include <RH_RF95.h>
-#define PTP_CLIENT
+#include <RHReliableDatagram.h>
 
-//Variables flowsensor
+#define CLIENT_ADDRESS 2
+#define SERVER_ADDRESS 1
+
 byte PIN_SENSOR   = 10;
 // The hall-effect flow sensor outputs approximately 4.5 pulses per second per
 // litre/minute of flow.
@@ -13,34 +15,30 @@ float flowRate;
 unsigned int flowMilliLitres;
 unsigned long totalMilliLitres;
 unsigned long oldTime;
-uint8_t tapNumber[]= "01"; 
-
-//Interupt bools
-bool prevPulsState = true; 
-bool FlowPuls = false; 
 
 // Singleton instance of the radio driver
-RH_RF95 rf95(6, 2);
+RH_RF95 driver(6, 2);
+
+// Class to manage message delivery and receipt, using the driver declared above
+RHReliableDatagram manager(driver, CLIENT_ADDRESS);
+
+//ISR
+bool prevPulsState = true; 
+bool FlowPuls = false; 
+bool busyCalculating= false; 
+bool busySending= false ;  
 
 void setup() 
 {
   // Dramco uno - enable 3v3 voltage regulator
-  //%%%%%%%% Heb ik da nodig k denk van ni dus efkes weggedaan 
-  //pinMode(8, OUTPUT);
-  //digitalWrite(8, HIGH);
+ pinMode(8, OUTPUT);
+digitalWrite(8, HIGH);
 
-  Serial.begin(9600);
+  Serial.begin(115200);
   while(!Serial) ; // Wait for serial port to be available
-  if(!rf95.init())
+  if(!manager.init())
     Serial.println("init failed");
-    rf95.setFrequency(868);
-  
-  //Setup flowsensor:
-  pulseCount        = 0;
-  flowRate          = 0.0;
-  flowMilliLitres   = 0;
-  totalMilliLitres  = 0;
-  oldTime           = 0;
+  driver.setFrequency(868);
 
   //Setup Interuptpin 10 
   //pinMode(PIN_SENSOR, INPUT_PULLUP);
@@ -48,20 +46,19 @@ void setup()
   *digitalPinToPCMSK(PIN_SENSOR) |= bit (digitalPinToPCMSKbit(PIN_SENSOR));  // enable pin
   PCIFR  |= bit (digitalPinToPCICRbit(PIN_SENSOR)); // clear any outstanding interrupt
   PCICR  |= bit (digitalPinToPCICRbit(PIN_SENSOR)); // enable interrupt for the group
- 
+
+  pulseCount        = 0;
+  flowRate          = 0.0;
+  flowMilliLitres   = 0;
+  totalMilliLitres  = 41;
+  oldTime           = 0;
 }
 
-#warning "compiling lora ptp client code"
-void loop()
+
+void CalculatingFlow()
 {
-  //if((millis() - oldTime) > 1000)    // Only process counters once per second
-  if((millis() - oldTime) > 60000)    // Only process counters once per minute 
-  { 
-    // Store time and counter temporarly and reset oldTime,
-    // Because of this backup it is not nescesary to stop interrupts during the calculation 
-    uint16_t tijdsverschil= millis() - oldTime;
-    uint16_t pulseCount_temp = pulseCount; 
-    oldTime = millis();
+    //Store counter temporarily
+    uint16_t pulseCount_temp = pulseCount;
 
     // Reset the pulse counter so we can start incrementing again 
     pulseCount = 0;
@@ -71,43 +68,55 @@ void loop()
     // that to scale the output. We also apply the calibrationFactor to scale the output
     // based on the number of pulses per second per units of measure (litres/minute in
     // this case) coming from the sensor.
-    //flowRate = ((1000.0 / (millis() - oldTime)) * pulseCount_temp) / calibrationFactor;
-    flowRate = ((60000.0 / tijdsverschil) * pulseCount_temp) / calibrationFactor;  
+    flowRate = ((1000.0 / (millis() - oldTime)) * pulseCount_temp) / calibrationFactor;   // calculating per seconde 
+    //flowRate = ((60000.0 / (millis() - oldTime)) * pulseCount_temp) / calibrationFactor; // calculating per minute
+
+
+    // Note the time this processing pass was executed. Note that because we've
+    // disabled interrupts the millis() function won't actually be incrementing right
+    // at this point, but it will still return the value it was set to just before
+    // interrupts went away.
+    oldTime = millis();
     
     // Divide the flow rate in litres/minute by 60 to determine how many litres have
     // passed through the sensor in this 1 second interval, then multiply by 1000 to
     // convert to millilitres.
-    flowMilliLitres = (flowRate / 60) * 1000;
+    flowMilliLitres = (flowRate / 60) * 1000;   // calculating per seconde 
+    //flowMilliLitres = flowRate  * 1000;         // calculating per minute
     
     // Add the millilitres passed in this second to the cumulative total
     totalMilliLitres += flowMilliLitres;
       
+    
     // Print the cumulative total of litres flowed since starting
     Serial.print("Output Liquid Quantity: ");        
     Serial.print(totalMilliLitres);
     Serial.println("mL"); 
     Serial.print("\t");       // Print tab space
-  }
+}
 
-
-  if ( totalMilliLitres > 3000 ){// per 3 liter zenden 
+void Sending()
+{
   Serial.println("Sending to rf95_server");
-  // Send a message to rf95_server 
-  rf95.send(tapNumber, sizeof(tapNumber));
+  // Send a message to rf95_server
+  uint8_t data[] = "data";
 
-  rf95.waitPacketSent();
+  // Send a message to manager_server
+  if (manager.sendtoWait(data, sizeof(data), SERVER_ADDRESS))
+  {
   // Now wait for a reply
   uint8_t buf[RH_RF95_MAX_MESSAGE_LEN];
   uint8_t len = sizeof(buf);
+    uint8_t from;   
 
-  if (rf95.waitAvailableTimeout(3000))
-  { 
-    // Should be a reply message for us now   
-    if (rf95.recv(buf, &len))
-   {
-      Serial.print("Succes ");
-      totalMilliLitres -= 3000;    
-    }
+ if (manager.recvfromAckTimeout(buf, &len, 2000, &from))
+    {
+      Serial.print("got reply from : 0x");
+      Serial.print(from, HEX);
+      Serial.print(": ");
+      Serial.println((char*)buf);
+      totalMilliLitres -=20; 
+    } 
     else
     {
       Serial.println("recv failed");
@@ -116,8 +125,7 @@ void loop()
   else
   {
     Serial.println("No reply, is rf95_server running?");
-  }
-  }
+  }  
 }
 
 // Making an interrupt pin from pin 10 
@@ -138,3 +146,27 @@ ISR (PCINT0_vect){ //  pin change interrupt for D8 to D13
   }
   prevPulsState = currentState;
 }
+
+#warning "compiling lora ptp client code"
+void loop()
+{
+  //if((millis() - oldTime) > 60000)    // Only process counters once per minute 
+ if((millis() - oldTime) > 1000 && !busySending)    // Only process counters once per second
+  {
+    busyCalculating= true;
+    CalculatingFlow();
+    busyCalculating= false;
+  }
+
+  if (totalMilliLitres > 20 && !busyCalculating) // send message each 20ml
+  {
+    noInterrupts ();
+    busySending= true ;
+    Sending(); 
+    interrupts ();
+    busySending= false ;
+  }
+}
+
+
+

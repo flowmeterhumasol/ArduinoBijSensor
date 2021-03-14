@@ -1,52 +1,99 @@
-// Example sketch showing how to create a simple messageing client
-// with the RH_RF95 class. RH_RF95 class does not provide for addressing or
-// reliability, so you should only use RH_RF95 if you do not need the higher
-// level messaging abilities.
-// It is designed to work with the other example rf95_server
-// Tested with Anarduino MiniWirelessLoRa, Rocket Scream Mini Ultra Pro with the RFM95W 
-
 #include <Arduino.h>
 #include <SPI.h>
 #include <RH_RF95.h>
-
 #define PTP_CLIENT
+
+//Variables flowsensor
+byte PIN_SENSOR   = 10;
+// The hall-effect flow sensor outputs approximately 4.5 pulses per second per
+// litre/minute of flow.
+float calibrationFactor = 98;
+volatile uint16_t pulseCount;  
+float flowRate;
+unsigned int flowMilliLitres;
+unsigned long totalMilliLitres;
+unsigned long oldTime;
+uint8_t tapNumber[]= "01"; 
+
+//Interupt bools
+bool prevPulsState = true; 
+bool FlowPuls = false; 
 
 // Singleton instance of the radio driver
 RH_RF95 rf95(6, 2);
-unsigned long totalLiters = 67;
-unsigned int kraannmr = 0;
-String message; 
-
 
 void setup() 
 {
   // Dramco uno - enable 3v3 voltage regulator
-  pinMode(8, OUTPUT);
-  digitalWrite(8, HIGH);
+  //%%%%%%%% Heb ik da nodig k denk van ni dus efkes weggedaan 
+  //pinMode(8, OUTPUT);
+  //digitalWrite(8, HIGH);
 
   Serial.begin(9600);
   while(!Serial) ; // Wait for serial port to be available
   if(!rf95.init())
     Serial.println("init failed");
-  // Defaults after init are 434.0MHz, 13dBm, Bw = 125 kHz, Cr = 4/5, Sf = 128chips/symbol, CRC on
-
     rf95.setFrequency(868);
   
-}
+  //Setup flowsensor:
+  pulseCount        = 0;
+  flowRate          = 0.0;
+  flowMilliLitres   = 0;
+  totalMilliLitres  = 0;
+  oldTime           = 0;
 
+  //Setup Interuptpin 10 
+  //pinMode(PIN_SENSOR, INPUT_PULLUP);
+  pinMode(PIN_SENSOR, INPUT);
+  *digitalPinToPCMSK(PIN_SENSOR) |= bit (digitalPinToPCMSKbit(PIN_SENSOR));  // enable pin
+  PCIFR  |= bit (digitalPinToPCICRbit(PIN_SENSOR)); // clear any outstanding interrupt
+  PCICR  |= bit (digitalPinToPCICRbit(PIN_SENSOR)); // enable interrupt for the group
+ 
+}
 
 #warning "compiling lora ptp client code"
 void loop()
 {
-  Serial.println("Sending to rf95_server");
-  // Send a message to rf95_server
-  sprintf(message,"%d:%f", kraannmr,totalLiters);
-  if (strlen(message)<RH_RF95_MAX_MESSAGE_LEN)
-  //rf95.send((uint8_t *)message, sizeof(message));
-  uint8_t data[] =  atoi(message.c_str ());
+  //if((millis() - oldTime) > 1000)    // Only process counters once per second
+  if((millis() - oldTime) > 60000)    // Only process counters once per minute 
+  { 
+    // Store time and counter temporarly and reset oldTime,
+    // Because of this backup it is not nescesary to stop interrupts during the calculation 
+    uint16_t tijdsverschil= millis() - oldTime;
+    uint16_t pulseCount_temp = pulseCount; 
+    oldTime = millis();
 
-  //uint8_t data[] = "Hello World!";
-  rf95.send(data, sizeof(data));
+    // Reset the pulse counter so we can start incrementing again 
+    pulseCount = 0;
+  
+    // Because this loop may not complete in exactly 1 second intervals we calculate
+    // the number of milliseconds that have passed since the last execution and use
+    // that to scale the output. We also apply the calibrationFactor to scale the output
+    // based on the number of pulses per second per units of measure (litres/minute in
+    // this case) coming from the sensor.
+    //flowRate = ((1000.0 / (millis() - oldTime)) * pulseCount_temp) / calibrationFactor;
+    flowRate = ((60000.0 / tijdsverschil) * pulseCount_temp) / calibrationFactor;  
+    
+    // Divide the flow rate in litres/minute by 60 to determine how many litres have
+    // passed through the sensor in this 1 second interval, then multiply by 1000 to
+    // convert to millilitres.
+    flowMilliLitres = (flowRate / 60) * 1000;
+    
+    // Add the millilitres passed in this second to the cumulative total
+    totalMilliLitres += flowMilliLitres;
+      
+    // Print the cumulative total of litres flowed since starting
+    Serial.print("Output Liquid Quantity: ");        
+    Serial.print(totalMilliLitres);
+    Serial.println("mL"); 
+    Serial.print("\t");       // Print tab space
+  }
+
+
+  if ( totalMilliLitres > 3000 ){// per 3 liter zenden 
+  Serial.println("Sending to rf95_server");
+  // Send a message to rf95_server 
+  rf95.send(tapNumber, sizeof(tapNumber));
 
   rf95.waitPacketSent();
   // Now wait for a reply
@@ -58,10 +105,8 @@ void loop()
     // Should be a reply message for us now   
     if (rf95.recv(buf, &len))
    {
-      Serial.print("got reply: ");
-      Serial.println((char*)buf);
-//      Serial.print("RSSI: ");
-//      Serial.println(rf95.lastRssi(), DEC);    
+      Serial.print("Succes ");
+      totalMilliLitres -= 3000;    
     }
     else
     {
@@ -72,5 +117,24 @@ void loop()
   {
     Serial.println("No reply, is rf95_server running?");
   }
-  delay(400);
+  }
+}
+
+// Making an interrupt pin from pin 10 
+ISR (PCINT0_vect){ //  pin change interrupt for D8 to D13
+  PCIFR  |= bit (digitalPinToPCICRbit(PIN_SENSOR)); // clear any outstanding interrupt
+  bool currentState = (bool)digitalRead(PIN_SENSOR);
+  if(!FlowPuls && prevPulsState){
+    if(!currentState){
+      pulseCount++;
+      FlowPuls = true; 
+    }
+  }
+  // Only nescessary for debouncing (when making puls by hand)
+  else if (FlowPuls && !prevPulsState){
+    if(currentState){
+      FlowPuls = false; 
+    }
+  }
+  prevPulsState = currentState;
 }

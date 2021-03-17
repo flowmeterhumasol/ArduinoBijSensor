@@ -20,7 +20,7 @@ RHReliableDatagram manager(driver, CLIENT_ADDRESS);
 // flow rate
 volatile uint16_t pulseCount;  
 float calibrationFactor = 98;
-uint16_t totalMilliLitres;
+uint8_t totalMilliLitres;
 unsigned long oldTime=0;
 
 //ISR
@@ -86,13 +86,13 @@ void loop()
 
   if (totalMilliLitres > 20 ) // send message each 20ml
   {
-    uint8_t data[] = "data";
-    sendData(data, sizeof(data));
-    totalMilliLitres -= 20;
+    uint8_t totalMilliLitres_temp= totalMilliLitres; 
+    uint8_t data[] = {totalMilliLitres};
+    if (sendData(data, sizeof(data)))
+    {
+    totalMilliLitres -= totalMilliLitres_temp;
+    }
   }
-
-  
-
 }
 
 bool sendData(uint8_t * data, uint8_t len){

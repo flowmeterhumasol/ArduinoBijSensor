@@ -4,6 +4,7 @@
 #include <RHReliableDatagram.h>
 
 #define MEASUREMENT_PERIOD  5000
+#define SENDING_THRESHOLD   25 
 
 #define CLIENT_ADDRESS      2
 #define SERVER_ADDRESS      1
@@ -25,20 +26,17 @@ unsigned long oldTime=0;
 
 //ISR
 bool prevPulsState = true; 
-bool FlowPuls = false; 
 
 // Making an interrupt pin from pin 10 
 ISR (PCINT0_vect){ //  pin change interrupt for D8 to D13
   PCIFR  |= bit (digitalPinToPCICRbit(PIN_SENSOR)); // clear any outstanding interrupt
   bool currentState = (bool)digitalRead(PIN_SENSOR);
-  if(prevPulsState){
-    if(!currentState){
+  if(prevPulsState && !currentState){
       pulseCount++;
-      FlowPuls = true; 
-    }
   }
   prevPulsState = currentState;
 }
+
 
 bool sendData(uint8_t * data, uint8_t len);
 void calculatingFlow(void);
@@ -54,7 +52,6 @@ void setup()
   digitalWrite(PIN_3V3_ENABLE, HIGH);
 
   //Setup Interuptpin 10 
-  //pinMode(PIN_SENSOR, INPUT_PULLUP);
   pinMode(PIN_SENSOR, INPUT);
   *digitalPinToPCMSK(PIN_SENSOR) |= bit (digitalPinToPCMSKbit(PIN_SENSOR));  // enable pin change interrupt
   PCIFR  |= bit (digitalPinToPCICRbit(PIN_SENSOR)); // clear any outstanding interrupt
@@ -65,7 +62,6 @@ void setup()
   {
     Serial.println("init failed");
   }
-  
   driver.setFrequency(868);
   manager.setRetries(0);
   manager.setTimeout(100);
@@ -80,26 +76,22 @@ void setup()
 
 void loop()
 {
-  if((millis() - oldTime) > MEASUREMENT_PERIOD)    // Only process counters once per minute 
+  if((millis() - oldTime) > MEASUREMENT_PERIOD)     
   {
     oldTime = millis();
     calculatingFlow();
   }
 
-  if (totalMilliLitres > 20 ) // send message each 20ml
+  if (totalMilliLitres >= SENDING_THRESHOLD) 
   {
-    uint8_t data[4] = {'d', 'a', 't', 'a'};
+    uint8_t data[] = "data";
     sendData(data, sizeof(data));
-    totalMilliLitres -= 20;
+    totalMilliLitres -= SENDING_THRESHOLD;
   }
-
-  
-
 }
 
 bool sendData(uint8_t * data, uint8_t len){
   Serial.println(F("Sending to rf95_server"));
- 
   // Send a message to manager_server
   if (manager.sendtoWait(data, len, SERVER_ADDRESS))
   {
@@ -117,22 +109,16 @@ void calculatingFlow(void)
 {
     //Store counter temporarily
     uint16_t pulseCount_temp = pulseCount;
-
     // Reset the pulse counter so we can start incrementing again 
     pulseCount = 0;
   
-    float flowRate =  (float)(pulseCount_temp / calibrationFactor); // calculating per minute
-   
-   
-   // flowMilliLitres = (flowRate / 60) * 1000;   // calculating per seconde 
-    float flowMilliLitres = (flowRate *1000  * MEASUREMENT_PERIOD)/ 60000 ;         // calculating per minute
-    
+    float flowRate =  (float)(pulseCount_temp / calibrationFactor); 
+    float flowMilliLitres = (flowRate *1000  * MEASUREMENT_PERIOD)/ 60000 ;        
     // Add the millilitres passed in this second to the cumulative total
     totalMilliLitres += (uint16_t)round(flowMilliLitres);
-      
-    
+  
     // Print the cumulative total of litres flowed since starting
-    Serial.print("Output Liquid Quantity: ");        
+    Serial.print("Liquid Quantity: ");        
     Serial.print(totalMilliLitres);
     Serial.println("mL"); 
 }

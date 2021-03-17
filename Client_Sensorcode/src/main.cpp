@@ -48,12 +48,13 @@ void setup()
 
 void loop()
 {
-   // Print pulscount
-  /*  Serial.print("Pulsecount: ");        
+  /* // Print pulscount
+   Serial.print("Pulsecount: ");        
     Serial.println(pulseCount);
     delay(1000);
-   */
    
+     */
+
   if((millis() - oldTime) > 1000)    // Only process counters once per second
   //if((millis() - oldTime) > 60000)    // Only process counters once per minute 
   { 

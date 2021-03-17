@@ -3,7 +3,7 @@
 #include <RH_RF95.h>
 #include <RHReliableDatagram.h>
 
-#define MEASUREMENT_PERIOD  1000
+#define MEASUREMENT_PERIOD  5000
 #define SENDING_THRESHOLD   25 
 
 #define CLIENT_ADDRESS      2
@@ -12,9 +12,9 @@
 #define PIN_SENSOR          10
 #define PIN_3V3_ENABLE      8
 
+//Modem
 // Singleton instance of the radio driver
 RH_RF95 driver(6, 2);
-
 // Class to manage message delivery and receipt, using the driver declared above
 RHReliableDatagram manager(driver, CLIENT_ADDRESS);
 
@@ -33,6 +33,7 @@ ISR (PCINT0_vect){ //  pin change interrupt for D8 to D13
   bool currentState = (bool)digitalRead(PIN_SENSOR);
   if(prevPulsState && !currentState){
       pulseCount++;
+      Serial.print(F("."));
   }
   prevPulsState = currentState;
 }
@@ -43,35 +44,33 @@ void calculatingFlow(void);
 
 void setup() 
 {
-  Serial.begin(9600);
-  while(!Serial) ; // Wait for serial port to be available
+  //Init variables
+  pulseCount        = 0;
+  totalMilliLitres  = 0;
+  oldTime           = 0;
 
-  Serial.println(F("I/O init."));
+  // I/O init
   // Dramco uno - enable 3v3 voltage regulator
   pinMode(PIN_3V3_ENABLE, OUTPUT);
   digitalWrite(PIN_3V3_ENABLE, HIGH);
+
+  Serial.begin(9600);
+  while(!Serial) ; // Wait for serial port to be available
+
+  Serial.println(F("Modem init."));
+  if(!manager.init())
+  {
+    Serial.println("init failed");
+  }
+  driver.setFrequency(868);
+  manager.setRetries(0);
+  manager.setTimeout(100);
 
   //Setup Interuptpin 10 
   pinMode(PIN_SENSOR, INPUT);
   *digitalPinToPCMSK(PIN_SENSOR) |= bit (digitalPinToPCMSKbit(PIN_SENSOR));  // enable pin change interrupt
   PCIFR  |= bit (digitalPinToPCICRbit(PIN_SENSOR)); // clear any outstanding interrupt
   PCICR  |= bit (digitalPinToPCICRbit(PIN_SENSOR)); // enable interrupt for the group
-
-  Serial.println(F("Modem init."));
- /*if(!manager.init())
-  {
-    Serial.println("init failed");
-  }
-  */
- 
-  driver.setFrequency(868);
-  manager.setRetries(0);
-  manager.setTimeout(100);
-
-  Serial.println(F("Init variables"));
-  pulseCount        = 0;
-  totalMilliLitres  = 0;
-  oldTime           = 0;
 
   Serial.println(F("Setup complete."));
 }
@@ -84,12 +83,12 @@ void loop()
     calculatingFlow();
   }
 
-  if (totalMilliLitres >= SENDING_THRESHOLD) 
+  /*if (totalMilliLitres >= SENDING_THRESHOLD) 
   {
     uint8_t data[] = "data";
     sendData(data, sizeof(data));
     totalMilliLitres -= SENDING_THRESHOLD;
-  }
+  }*/
 }
 
 bool sendData(uint8_t * data, uint8_t len){

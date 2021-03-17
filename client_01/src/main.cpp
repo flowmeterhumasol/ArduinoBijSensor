@@ -3,7 +3,7 @@
 #include <RH_RF95.h>
 #include <RHReliableDatagram.h>
 
-#define MEASUREMENT_PERIOD  5000
+#define MEASUREMENT_PERIOD  1000
 #define SENDING_THRESHOLD   25 
 
 #define CLIENT_ADDRESS      2
@@ -58,10 +58,12 @@ void setup()
   PCICR  |= bit (digitalPinToPCICRbit(PIN_SENSOR)); // enable interrupt for the group
 
   Serial.println(F("Modem init."));
-  if(!manager.init())
+ /*if(!manager.init())
   {
     Serial.println("init failed");
   }
+  */
+ 
   driver.setFrequency(868);
   manager.setRetries(0);
   manager.setTimeout(100);
@@ -113,7 +115,7 @@ void calculatingFlow(void)
     pulseCount = 0;
   
     float flowRate =  (float)(pulseCount_temp / calibrationFactor); 
-    float flowMilliLitres = (flowRate *1000  * MEASUREMENT_PERIOD)/ 60000 ;        
+    float flowMilliLitres = (flowRate * 1000  * MEASUREMENT_PERIOD)/ 60000 ;        
     // Add the millilitres passed in this second to the cumulative total
     totalMilliLitres += (uint16_t)round(flowMilliLitres);
   

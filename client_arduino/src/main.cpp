@@ -20,7 +20,6 @@ RHReliableDatagram manager(driver, CLIENT_ADDRESS);
 
 // flow rate
 volatile uint16_t pulseCount;  
-//float calibrationFactor = 1000;
 float calibrationFactor = 98;
 uint16_t totalMilliLitres;
 unsigned long oldTime=0;
@@ -78,7 +77,7 @@ void setup()
 
 void loop()
 {
-  if((millis() - oldTime) > MEASUREMENT_PERIOD)     
+  if((millis() - oldTime) > MEASUREMENT_PERIOD)     // Only process counters once per measurement_period
   {
     oldTime = millis();
     calculatingFlow(); 
@@ -117,8 +116,14 @@ void calculatingFlow(void)
     // Reset the pulse counter so we can start incrementing again 
     pulseCount = 0;
 
-    float flowRate =  (float)(pulseCount_temp / calibrationFactor); // calculating per minute
-    float flowMilliLitres = (flowRate *1000  * MEASUREMENT_PERIOD)/ 60000 ;         // calculating per minute
+    //apply the calibrationFactor to scale the output based on the number of pulses per measurement_period per units of measure
+    // (litres/minute in this case) coming from the sensor.
+    float flowRate =  (float)(pulseCount_temp / calibrationFactor); 
+
+    // Divide the flow rate in litres/minute by 60 to determine how many litres have
+    // passed through the sensor in this 1 second interval, then multiply by 1000 to
+    // convert to millilitres.
+    float flowMilliLitres = (flowRate *1000  * MEASUREMENT_PERIOD)/ 60000 ;       
     
     // Add the millilitres passed in this second to the cumulative total
     totalMilliLitres += (uint16_t)round(flowMilliLitres);

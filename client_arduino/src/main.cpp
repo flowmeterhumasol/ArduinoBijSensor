@@ -6,7 +6,9 @@
 #define MEASUREMENT_PERIOD  5000
 #define SENDING_THRESHOLD   50
 
-#define CLIENT_ADDRESS      2
+// Since the lowest number to accessible for the client is 2, 
+// client_address 2 corresponds with tap 1 
+#define CLIENT_ADDRESS      2     
 #define SERVER_ADDRESS      1
 
 #define PIN_SENSOR          10

@@ -4,7 +4,7 @@
 #include <RHReliableDatagram.h>
 
 #define MEASUREMENT_PERIOD  5000
-#define SENDING_THRESHOLD   10
+#define SENDING_THRESHOLD   50
 
 #define CLIENT_ADDRESS      2
 #define SERVER_ADDRESS      1
@@ -20,8 +20,8 @@ RHReliableDatagram manager(driver, CLIENT_ADDRESS);
 
 // flow rate
 volatile uint16_t pulseCount;  
-float calibrationFactor = 1000;
-//float calibrationFactor = 98;
+//float calibrationFactor = 1000;
+float calibrationFactor = 98;
 uint16_t totalMilliLitres;
 unsigned long oldTime=0;
 

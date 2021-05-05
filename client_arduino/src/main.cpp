@@ -77,12 +77,14 @@ void setup()
 
 void loop()
 {
-  if((millis() - oldTime) > MEASUREMENT_PERIOD)     // Only process counters once per measurement_period
+  // Only process counters once per measurement_period
+  if((millis() - oldTime) > MEASUREMENT_PERIOD)     
   {
     oldTime = millis();
     calculatingFlow(); 
   }
 
+  // Each time the threshold is passed, send the totalMilliliters to the server arduino 
   if (totalMilliLitres >= SENDING_THRESHOLD  ) 
   {
     uint16_t totalMilliLitres_temp= totalMilliLitres; 

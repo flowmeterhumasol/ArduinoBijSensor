@@ -1,5 +1,6 @@
-# ArduinoBijSensor
+# Client
 
-De code online gevonden, en zelf gemaakt komen overeen. 
-Wanneer we een andere flowsensor zouden gebruiken moeten we de waarde van 98 aanpassen, en mogelijks de interrupt naar Rising veranderen. 
-Voor de sensors die we in de praktijk zouden willen gebruiken zouden we deze aanpassingen moeten uitvoeren. 
+First test the DebietMetenInternetCode to test the used sensor. Depending on the sensor, change the calibrationFactor. 
+
+The Client_Sensorcode is the same code but with added ISR to use pin 10 as interrupt pin. 
+Client_arduino is the final code with the loracommunication and sensorcode integrated. 
